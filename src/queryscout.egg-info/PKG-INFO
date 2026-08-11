@@ -1,0 +1,35 @@
+Metadata-Version: 2.4
+Name: queryscout
+Version: 0.1.0
+Summary: AI assistant for querying statistical APIs
+License: MIT
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: requests
+Requires-Dist: pydantic
+Requires-Dist: pydantic-ai
+
+# QueryScout
+
+A small Python CLI scaffold for QueryScout.
+
+Quickstart
+
+1. Create a virtual environment:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+2. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Run the CLI:
+
+```bash
+python -m query_scout.cli run "SELECT * FROM table"
+```
