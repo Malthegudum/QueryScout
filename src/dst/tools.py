@@ -1,3 +1,5 @@
+import json
+
 from .client import DSTClient
 from .models import DSTQuery
 
@@ -29,15 +31,22 @@ def get_dst_table_metadata(table_id: str):
 
 
 def run_dst_query(query: DSTQuery):
-    """Run a DSTQuery and return a compact preview.
+    """Run a DSTQuery and return the tested HTTP request, standalone code and a preview."""
+    request = client.build_request(query)
+    data = client.execute(request)
 
-    Inspect the result before deciding that the query is correct.
-    """
-    rows = client.execute(query)
+    preview = json.loads(
+        data.head(10).to_json(
+            orient="records",
+            force_ascii=False,
+        )
+    )
 
     return {
-        "query": query.model_dump(),
-        "row_count": len(rows),
-        "columns": list(rows[0].keys()) if rows else [],
-        "preview": rows[:10],
+        "source": "dst",
+        "request": request.model_dump(exclude_none=True),
+        "code": client.to_python(request),
+        "row_count": len(data),
+        "columns": data.columns.tolist(),
+        "preview": preview,
     }

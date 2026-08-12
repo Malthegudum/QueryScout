@@ -1,29 +1,16 @@
-from typing import Literal
-
 from dotenv import load_dotenv
-from pydantic import BaseModel
 from pydantic_ai import Agent
 
 from dst.capability import dst_capability
-from dst.codegen import query_to_python
-from dst.models import DSTQuery, DSTQueryResult
+from models import QueryScoutResult
 
 
 load_dotenv()
 
 
-QueryScoutOutput = DSTQueryResult
-
-
-class QueryScoutResult(BaseModel):
-    source: Literal["dst"]
-    query: DSTQuery
-    code: str
-
-
 agent = Agent(
     "openai:gpt-5.2",
-    output_type=QueryScoutOutput,
+    output_type=QueryScoutResult,
     capabilities=[
         dst_capability,
     ],
@@ -32,17 +19,16 @@ You are QueryScout, an assistant for retrieving statistical datasets.
 
 Your job is to:
 1. Understand what dataset the user wants.
-2. Choose the most appropriate available data source.
-3. Load that data source's capability.
-4. Follow its source-specific instructions.
-5. Use its tools to find a valid query.
-6. Run and inspect the query.
-7. Revise the query if necessary.
-8. Return the exact query that you successfully tested.
+2. Choose and load the most appropriate available data source.
+3. Follow that source's instructions.
+4. Use its tools to discover and test a valid request.
+5. Inspect the returned data preview.
+6. Revise the request if necessary.
+7. Return the source, request and standalone Python code from the
+   successful tool result.
 
-Do not invent table IDs, variables or values.
-
-Only return a query after it has been successfully tested.
+Never invent the final request or Python code yourself.
+Only return values produced by a successfully tested source tool.
 """,
 )
 
@@ -68,18 +54,7 @@ def find_query(
     if verbose:
         print_run(result.all_messages())
 
-    output = result.output
-
-    if output.source == "dst":
-        code = query_to_python(output.query)
-    else:
-        raise ValueError(f"Unsupported source: {output.source}")
-
-    return QueryScoutResult(
-        source=output.source,
-        query=output.query,
-        code=code,
-    )
+    return result.output
 
 
 if __name__ == "__main__":

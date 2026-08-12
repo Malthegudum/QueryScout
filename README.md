@@ -1,55 +1,38 @@
 # QueryScout
 
-QueryScout is an experimental AI assistant for querying statistical APIs using natural language.
-
-Instead of asking an LLM to generate arbitrary data-fetching code, QueryScout uses the model to discover and verify a structured query. The resulting query can then be executed again using ordinary Python without involving the AI.
+QueryScout is an experimental AI assistant for finding and testing queries against statistical APIs from natural-language questions.
 
 Currently, QueryScout supports **Statistics Denmark (DST / StatBank)**.
 
-## How it works
+## Idea
 
-A user can ask a question such as:
-
-> Get the population of Denmark from 2020 onwards.
-
-QueryScout then:
-
-1. Selects the appropriate data source.
-2. Loads the source-specific tools and instructions.
-3. Searches for relevant tables.
-4. Inspects table metadata.
-5. Constructs a structured query.
-6. Executes the query and inspects the result.
-7. Revises the query if necessary.
-8. Returns the verified query and reusable Python code.
-
-Conceptually:
+The LLM is used for discovery and interpretation. The final result is deliberately independent of QueryScout.
 
 ```text
 Natural-language question
-          ↓
-     QueryScout
-          ↓
-  Data source capability
-          ↓
-   metadata discovery
-          ↓
-      DSTQuery
-          ↓
-    execute + inspect
-          ↓
-   verified DSTQuery
-       ↙       ↘
-   dataset    Python code
+        ↓
+    QueryScout
+        ↓
+source-specific capability
+        ↓
+ internal source query
+        ↓
+ build + test HTTP request
+        ↓
+  verified result
+   ├── HTTP request
+   └── standalone Python code
 ```
 
-The important distinction is:
+For DST, the agent internally uses `DSTQuery` to navigate StatBank metadata and construct a valid request. That internal model is not the public output.
 
-- **The agent decides what data to request.**
-- **The query describes the request.**
-- **The client knows how to execute it.**
+The public result contains:
 
-Once a query has been found, the AI is no longer required.
+- the selected source
+- the actual HTTP request that was tested
+- standalone Python code using `requests` and `pandas`
+
+The generated code does not import anything from QueryScout.
 
 ## Example
 
@@ -61,163 +44,110 @@ result = find_query(
     verbose=True,
 )
 
-print(result.query)
+print(result.request)
 print(result.code)
 ```
 
-`find_query()` returns:
+With `verbose=True`, QueryScout also prints the tools used during the run.
 
-- the selected data source
-- the verified query
-- Python code that can execute the same query again
-
-With `verbose=True`, the tool calls made by the agent are also printed.
-
-## Reusing a query without AI
-
-Queries are ordinary Pydantic models.
-
-For Statistics Denmark:
+A result contains the same information conceptually as:
 
 ```python
-from dst.client import DSTClient
-from dst.models import DSTQuery
-
-
-query = DSTQuery(
-    table_id="FOLK1A",
-    variables={
-        "OMRÅDE": ["000"],
-        "Tid": ["2024K1"],
+{
+    "source": "dst",
+    "request": {
+        "method": "POST",
+        "url": "https://api.statbank.dk/v1/data",
+        "json": {
+            "table": "...",
+            "format": "CSV",
+            "variables": [...],
+        },
     },
-)
-
-client = DSTClient()
-data = client.execute(query)
-
-print(data)
+    "code": "...",
+}
 ```
 
-This makes queries reproducible and usable from notebooks, scripts, or other Python applications without calling an LLM again.
+The standalone code is similar to:
+
+```python
+from io import StringIO
+
+import pandas as pd
+import requests
+
+request = {
+    "method": "POST",
+    "url": "https://api.statbank.dk/v1/data",
+    "json": {...},
+}
+
+response = requests.request(**request)
+response.raise_for_status()
+
+data = pd.read_csv(StringIO(response.text), sep=";")
+```
 
 ## Architecture
 
-Each statistical data source owns its own implementation:
+Each data source owns its own API-specific logic:
 
 ```text
-                        QueryScout
-                            │
-                    source capability
-                            │
-              ┌─────────────┼─────────────┐
-              │             │             │
-             DST       Jobindsats     Eurostat
-          (current)      (planned)      (planned)
-              │             │             │
-           tools          tools          tools
-              │             │             │
-          DSTQuery          ...           ...
-              │
-          DSTClient
-              │
-       Statistics Denmark
+                     QueryScout
+                         │
+                 source capability
+                ┌────────┴────────┐
+                ↓                 ↓
+               DST           Jobindsats
+            (current)          (planned)
+                │                 │
+          internal query     internal query
+                │                 │
+             client            client
+                │                 │
+                └────────┬────────┘
+                         ↓
+                 HTTP request + code
 ```
 
-There is deliberately no generic `DataQuery` or `DataClient`.
+There is no shared `DataQuery` or `DataClient`. Different APIs can keep different query models, metadata rules and response parsing.
 
-Different statistical APIs have different metadata formats, query formats, period conventions, and API behaviour. Each source therefore remains an explicit, self-contained module.
+The only shared output model is a small description of the tested HTTP request.
 
-## DST implementation
-
-The current DST integration is structured as:
+## DST module
 
 ```text
 src/
 ├── agent.py
+├── models.py
 └── dst/
     ├── capability.py
     ├── client.py
-    ├── codegen.py
     ├── instructions.md
     ├── models.py
     └── tools.py
 ```
 
-### `models.py`
+`DSTClient` owns the deterministic DST-specific work:
 
-Defines the reproducible `DSTQuery`.
+- `build_request(query)` converts an internal `DSTQuery` to an HTTP request
+- `execute(request)` executes the request and returns a pandas `DataFrame`
+- `to_python(request)` creates standalone Python code that performs the same request and parsing
 
-```python
-DSTQuery(
-    table_id="...",
-    variables={
-        "VARIABLE": ["VALUE"],
-    },
-)
-```
-
-### `client.py`
-
-Contains the deterministic Statistics Denmark API integration.
-
-The client can:
-
-- retrieve subjects
-- retrieve tables
-- retrieve table metadata
-- execute a `DSTQuery`
-
-It contains no agent logic.
-
-### `tools.py`
-
-Exposes the DST client to the agent through a small collection of tools:
-
-```text
-get_dst_subjects
-get_dst_tables
-get_dst_table_metadata
-run_dst_query
-```
-
-The query tool returns a compact preview so the model can inspect the result without requiring the entire dataset in its context.
-
-### `instructions.md`
-
-Contains the source-specific instructions used by the agent when working with Statistics Denmark.
-
-The agent is instructed to inspect metadata, avoid inventing table or value codes, execute its query, and verify the result before returning it.
-
-### `capability.py`
-
-Packages the DST instructions and tools into a Pydantic AI capability.
-
-The capability is loaded on demand, keeping source-specific tools and instructions separate from the main QueryScout agent.
-
-### `codegen.py`
-
-Generates deterministic Python code from a verified `DSTQuery`.
-
-The LLM does not generate this code itself. This ensures that the generated code corresponds exactly to the query that was tested.
+The capability and tools are only used by the agent to discover and verify the correct request.
 
 ## Installation
 
 QueryScout requires Python 3.11 or newer.
 
-Clone the repository:
-
 ```bash
 git clone https://github.com/Malthegudum/QueryScout.git
 cd QueryScout
-```
-
-Create a virtual environment:
-
-```bash
 python -m venv .venv
+pip install -e .
 ```
 
-Activate it on Windows:
+Activate the environment on Windows:
 
 ```powershell
 .venv\Scripts\Activate.ps1
@@ -229,90 +159,37 @@ or on macOS/Linux:
 source .venv/bin/activate
 ```
 
-Install QueryScout in editable mode:
-
-```bash
-pip install -e .
-```
-
-## OpenAI API key
-
 Create a `.env` file in the project root:
 
 ```env
 OPENAI_API_KEY=your-api-key
 ```
 
-The `.env` file should not be committed to Git.
-
 ## Development web interface
-
-The Pydantic AI development web interface can be started with:
 
 ```bash
 python src/agent.py
 ```
 
-The local server runs at:
+The local interface is served at:
 
 ```text
 http://127.0.0.1:7932
 ```
 
-The web interface runs the agent directly and is mainly useful for inspecting and debugging agent behaviour.
-
 ## Adding another data source
 
-A new data source should be added as its own module rather than modifying the DST implementation.
-
-For example:
+A new source should provide its own small module, for example:
 
 ```text
-src/
-├── dst/
-│   ├── client.py
-│   ├── models.py
-│   ├── tools.py
-│   ├── capability.py
-│   ├── instructions.md
-│   └── codegen.py
-│
-└── jobindsats/
-    ├── client.py
-    ├── models.py
-    ├── tools.py
-    ├── capability.py
-    ├── instructions.md
-    └── codegen.py
+jobindsats/
+├── capability.py
+├── client.py
+├── instructions.md
+├── models.py
+└── tools.py
 ```
 
-Each source owns:
+The source can use any internal query representation it needs. Its client is responsible for translating that representation into a real HTTP request, executing and parsing the response, and producing standalone Python code.
 
-- its query model
-- its API client
-- its agent tools
-- its source-specific instructions
-- its capability
-- its code generation
-
-The main QueryScout agent should only need to know which capabilities are available.
-
-## Project status
-
-QueryScout is currently an early prototype.
-
-Implemented:
-
-- Pydantic AI agent
-- on-demand DST capability
-- Statistics Denmark metadata discovery
-- structured `DSTQuery`
-- query execution and result preview
-- deterministic reusable Python code generation
-
-Planned:
-
-- additional statistical data sources
-- improved query validation
-- improved result inspection
-- a cleaner user-facing interface
+This keeps QueryScout source-specific internally while making its final output portable.

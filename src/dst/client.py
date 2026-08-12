@@ -1,8 +1,10 @@
-import csv
 from io import StringIO
+from pprint import pformat
 
+import pandas as pd
 import requests
 
+from models import RequestSpec
 from .models import DSTQuery
 
 
@@ -32,25 +34,60 @@ class DSTClient:
         response.raise_for_status()
         return response.json()
 
-    def execute(self, query: DSTQuery):
+    def build_request(self, query: DSTQuery) -> RequestSpec:
         variables = [
             {"code": code, "values": values}
             for code, values in query.variables.items()
         ]
 
-        response = requests.post(
-            f"{self.BASE_URL}/data",
+        return RequestSpec(
+            method="POST",
+            url=f"{self.BASE_URL}/data",
             json={
                 "table": query.table_id,
                 "format": "CSV",
                 "variables": variables,
             },
         )
+
+    def execute(self, request: RequestSpec) -> pd.DataFrame:
+        response = requests.request(
+            method=request.method,
+            url=request.url,
+            params=request.params,
+            json=request.json,
+            headers=request.headers,
+        )
         response.raise_for_status()
 
-        return list(
-            csv.DictReader(
-                StringIO(response.text),
-                delimiter=";",
-            )
+        return pd.read_csv(
+            StringIO(response.text),
+            sep=";",
         )
+
+    def to_python(self, request: RequestSpec) -> str:
+        request_dict = request.model_dump(exclude_none=True)
+        request_literal = pformat(
+            request_dict,
+            width=88,
+            sort_dicts=False,
+        )
+
+        return f'''from io import StringIO
+
+import pandas as pd
+import requests
+
+
+request = {request_literal}
+
+response = requests.request(**request)
+response.raise_for_status()
+
+data = pd.read_csv(
+    StringIO(response.text),
+    sep=";",
+)
+
+print(data)
+'''
