@@ -15,16 +15,12 @@ Natural-language question
         ↓
 source-specific capability
         ↓
- internal source query
-        ↓
  build + test HTTP request
         ↓
   verified result
    ├── HTTP request
    └── standalone Python code
 ```
-
-For DST, the agent internally uses `DSTQuery` to navigate StatBank metadata and construct a valid request. That internal model is not the public output.
 
 The public result contains:
 
@@ -61,19 +57,18 @@ src/
 └── dst/
     ├── capability.py
     ├── client.py
-    ├── instructions.md
-    └── models.py
+    └── instructions.md
 ```
 
-`capability.py` contains the DST tools and packages them into the on-demand Pydantic AI capability.
+`capability.py` contains the DST tools and packages them into the on-demand Pydantic AI capability. The main query tool takes ordinary typed arguments such as `table_id` and `variables`; there is no separate DST query model.
 
 `DSTClient` owns the deterministic DST-specific work:
 
-- `build_request(query)` converts an internal `DSTQuery` to an HTTP request
+- `build_request(table_id, variables)` converts the selected DST arguments to an HTTP request
 - `execute(request)` executes the request and returns a pandas `DataFrame`
 - `to_python(request)` creates standalone Python code that performs the same request and parsing
 
-There is no shared `DataQuery` or `DataClient`. Different APIs can keep different query models, metadata rules and response parsing.
+There is no shared `DataQuery` or `DataClient`. Different APIs can use different tool arguments, metadata rules and response parsing.
 
 ## Installation
 
@@ -120,8 +115,7 @@ A new source should provide its own small module, for example:
 jobindsats/
 ├── capability.py
 ├── client.py
-├── instructions.md
-└── models.py
+└── instructions.md
 ```
 
-The source can use any internal query representation it needs. Its client is responsible for translating that representation into a real HTTP request, executing and parsing the response, and producing standalone Python code.
+A source only needs the structures that its API actually requires. Its client is responsible for translating the capability's typed arguments into a real HTTP request, executing and parsing the response, and producing standalone Python code.
