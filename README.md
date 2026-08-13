@@ -50,71 +50,9 @@ print(result.code)
 
 With `verbose=True`, QueryScout also prints the tools used during the run.
 
-A result contains the same information conceptually as:
-
-```python
-{
-    "source": "dst",
-    "request": {
-        "method": "POST",
-        "url": "https://api.statbank.dk/v1/data",
-        "json": {
-            "table": "...",
-            "format": "CSV",
-            "variables": [...],
-        },
-    },
-    "code": "...",
-}
-```
-
-The standalone code is similar to:
-
-```python
-from io import StringIO
-
-import pandas as pd
-import requests
-
-request = {
-    "method": "POST",
-    "url": "https://api.statbank.dk/v1/data",
-    "json": {...},
-}
-
-response = requests.request(**request)
-response.raise_for_status()
-
-data = pd.read_csv(StringIO(response.text), sep=";")
-```
-
 ## Architecture
 
-Each data source owns its own API-specific logic:
-
-```text
-                     QueryScout
-                         │
-                 source capability
-                ┌────────┴────────┐
-                ↓                 ↓
-               DST           Jobindsats
-            (current)          (planned)
-                │                 │
-          internal query     internal query
-                │                 │
-             client            client
-                │                 │
-                └────────┬────────┘
-                         ↓
-                 HTTP request + code
-```
-
-There is no shared `DataQuery` or `DataClient`. Different APIs can keep different query models, metadata rules and response parsing.
-
-The only shared output model is a small description of the tested HTTP request.
-
-## DST module
+Each data source owns its own API-specific logic.
 
 ```text
 src/
@@ -124,9 +62,10 @@ src/
     ├── capability.py
     ├── client.py
     ├── instructions.md
-    ├── models.py
-    └── tools.py
+    └── models.py
 ```
+
+`capability.py` contains the DST tools and packages them into the on-demand Pydantic AI capability.
 
 `DSTClient` owns the deterministic DST-specific work:
 
@@ -134,7 +73,7 @@ src/
 - `execute(request)` executes the request and returns a pandas `DataFrame`
 - `to_python(request)` creates standalone Python code that performs the same request and parsing
 
-The capability and tools are only used by the agent to discover and verify the correct request.
+There is no shared `DataQuery` or `DataClient`. Different APIs can keep different query models, metadata rules and response parsing.
 
 ## Installation
 
@@ -171,11 +110,7 @@ OPENAI_API_KEY=your-api-key
 python src/agent.py
 ```
 
-The local interface is served at:
-
-```text
-http://127.0.0.1:7932
-```
+The local interface is served at `http://127.0.0.1:7932`.
 
 ## Adding another data source
 
@@ -186,10 +121,7 @@ jobindsats/
 ├── capability.py
 ├── client.py
 ├── instructions.md
-├── models.py
-└── tools.py
+└── models.py
 ```
 
 The source can use any internal query representation it needs. Its client is responsible for translating that representation into a real HTTP request, executing and parsing the response, and producing standalone Python code.
-
-This keeps QueryScout source-specific internally while making its final output portable.
