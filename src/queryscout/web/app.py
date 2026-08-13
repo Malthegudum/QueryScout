@@ -22,6 +22,17 @@ def render_result(result: QueryScoutResult) -> None:
     st.markdown(f"**Columns:** {', '.join(result.columns)}")
     st.dataframe(result.preview(20), use_container_width=True)
 
+    st.download_button(
+        "Download CSV",
+        data=result.data.to_csv(index=False).encode("utf-8"),
+        file_name="data.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+    st.markdown("**Reproduce this dataset with Python:**")
+    st.code(result.code, language="python")
+
 
 for message in st.session_state.chat_messages:
     with st.chat_message(message["role"]):
