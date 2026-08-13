@@ -1,74 +1,29 @@
 # QueryScout
 
-QueryScout is an experimental AI assistant for finding and testing queries against statistical APIs from natural-language questions.
+QueryScout retrieves statistical datasets from natural-language requests.
 
-Currently, QueryScout supports **Statistics Denmark (DST / StatBank)**.
+The idea is simple: use an AI agent to find and verify the right dataset once, then make the result reusable without the agent. QueryScout currently supports **Statistics Denmark (DST / StatBank)**.
 
-## Idea
-
-The LLM is used for discovery and interpretation. The final result is deliberately independent of QueryScout.
+## How it works
 
 ```text
-Natural-language question
+Natural-language request
         ↓
     QueryScout
         ↓
-source-specific capability
+find + inspect + test source
         ↓
- build + test HTTP request
+ verified HTTP request
         ↓
-  verified result
-   ├── HTTP request
-   └── standalone Python code
+ retrieve dataset
+        ↓
+ result
+ ├── pandas DataFrame
+ ├── tested HTTP request
+ └── standalone Python code
 ```
 
-The public result contains:
-
-- the selected source
-- the actual HTTP request that was tested
-- standalone Python code using `requests` and `pandas`
-
-The generated code does not import anything from QueryScout.
-
-## Example
-
-```python
-from agent import find_query
-
-result = find_query(
-    "Hent Danmarks befolkning fra 2020 og frem",
-    verbose=True,
-)
-
-print(result.request)
-print(result.code)
-```
-
-With `verbose=True`, QueryScout also prints the tools used during the run.
-
-## Architecture
-
-Each data source owns its own API-specific logic.
-
-```text
-src/
-├── agent.py
-├── models.py
-└── dst/
-    ├── capability.py
-    ├── client.py
-    └── instructions.md
-```
-
-`capability.py` contains the DST tools and packages them into the on-demand Pydantic AI capability. The main query tool takes ordinary typed arguments such as `table_id` and `variables`; there is no separate DST query model.
-
-`DSTClient` owns the deterministic DST-specific work:
-
-- `build_request(table_id, variables)` converts the selected DST arguments to an HTTP request
-- `execute(request)` executes the request and returns a pandas `DataFrame`
-- `to_python(request)` creates standalone Python code that performs the same request and parsing
-
-There is no shared `DataQuery` or `DataClient`. Different APIs can use different tool arguments, metadata rules and response parsing.
+The generated Python uses ordinary `requests` and `pandas`. It does not import QueryScout, so the same dataset can be retrieved later without an LLM.
 
 ## Installation
 
@@ -81,41 +36,107 @@ python -m venv .venv
 pip install -e .
 ```
 
-Activate the environment on Windows:
+Activate the virtual environment and create a `.env` file in the project root containing your OpenAI API key.
 
-```powershell
-.venv\Scripts\Activate.ps1
-```
+## Local chat interface
 
-or on macOS/Linux:
+The easiest way to use QueryScout is the local Streamlit chat:
 
 ```bash
-source .venv/bin/activate
+streamlit run src/queryscout/web/app.py
 ```
 
-Create a `.env` file in the project root:
+The browser interface lets you describe the dataset you want, answer clarification questions, inspect the resulting table, download it as CSV, and see standalone Python code for retrieving the same data again.
 
-```env
-OPENAI_API_KEY=your-api-key
+## Python API
+
+```python
+from queryscout import query
+
+result = query("Hent Danmarks befolkning fra 2020 og frem")
+
+print(result.data)
+print(result.request)
+print(result.code)
 ```
 
-## Development web interface
+`result.data` is the retrieved pandas `DataFrame`.
 
-```bash
-python src/agent.py
+Save only the dataset:
+
+```python
+result.to_csv("data.csv")
 ```
 
-The local interface is served at `http://127.0.0.1:7932`.
+Or save the dataset and reproducibility metadata:
 
-## Adding another data source
+```python
+result.save("population")
+```
 
-A new source should provide its own small module, for example:
+This creates:
 
 ```text
-jobindsats/
-├── capability.py
-├── client.py
-└── instructions.md
+population/
+├── data.csv
+└── query.json
 ```
 
-A source only needs the structures that its API actually requires. Its client is responsible for translating the capability's typed arguments into a real HTTP request, executing and parsing the response, and producing standalone Python code.
+`query.json` contains the source, tested HTTP request, and standalone Python code.
+
+## Multi-turn conversations
+
+```python
+from queryscout import QueryScoutSession
+
+session = QueryScoutSession()
+
+response = session.send("Jeg vil have arbejdsløshed i Danmark")
+print(response)
+
+response = session.send("Fordelt på kommuner siden 2020")
+
+if not isinstance(response, str):
+    print(response.data)
+```
+
+`QueryScoutSession` keeps message history, allowing follow-up messages and clarification questions.
+
+## Architecture
+
+```text
+src/queryscout/
+├── __init__.py
+├── agent.py
+├── models.py
+├── session.py
+├── sources/
+│   └── dst/
+│       ├── capability.py
+│       ├── client.py
+│       └── instructions.md
+└── web/
+    └── app.py
+```
+
+The main agent is mostly source-agnostic. Each source owns its API-specific discovery, metadata, request construction, execution, parsing, and standalone-code generation.
+
+The complete dataset is not passed through the language model. The agent discovers and verifies a request; QueryScout then executes that verified request deterministically to produce the final DataFrame.
+
+## Adding another source
+
+A source can follow the same small structure:
+
+```text
+sources/
+└── example/
+    ├── capability.py
+    ├── client.py
+    └── instructions.md
+```
+
+Different APIs do not need to share one universal query model. Each source can use the arguments and parsing logic appropriate for its API.
+
+## Status
+
+QueryScout is an early-stage project focused on making statistical data retrieval simple, verifiable, and reproducible.

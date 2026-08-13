@@ -1,3 +1,5 @@
+"""Pydantic AI capability for Statistics Denmark."""
+
 from pathlib import Path
 
 from pydantic_ai.capabilities import Capability
@@ -9,39 +11,20 @@ client = DSTClient()
 
 
 def get_dst_subjects():
-    """Get subject areas from Statistics Denmark."""
     return client.subjects()
 
 
 def get_dst_tables(subject: str | None = None):
-    """Get Statistics Denmark tables.
-
-    Args:
-        subject: Optional DST subject code.
-    """
     return client.tables(subject)
 
 
 def get_dst_table_metadata(table_id: str):
-    """Get metadata for a DST table.
-
-    Returns variables and valid values for the table.
-    Always inspect this before constructing a query.
-    """
     return client.table(table_id)
 
 
-def run_dst_query(
-    table_id: str,
-    variables: dict[str, list[str]],
-):
-    """Run a DST query and return the tested HTTP request, standalone code and a preview."""
-    request = client.build_request(
-        table_id=table_id,
-        variables=variables,
-    )
+def run_dst_query(table_id: str, variables: dict[str, list[str]]):
+    request = client.build_request(table_id=table_id, variables=variables)
     data = client.execute(request)
-
     return {
         "source": "dst",
         "request": request.model_dump(exclude_none=True),
@@ -52,19 +35,14 @@ def run_dst_query(
     }
 
 
-instructions = (
-    Path(__file__)
-    .with_name("instructions.md")
-    .read_text(encoding="utf-8")
-)
+instructions = Path(__file__).with_name("instructions.md").read_text(encoding="utf-8")
 
 
 dst_capability = Capability(
     id="dst",
     description=(
-        "Statistics Denmark / StatBank. "
-        "Use for official Danish statistics such as population, "
-        "labour market, prices, businesses and national accounts."
+        "Statistics Denmark / StatBank. Use for official Danish statistics such as "
+        "population, labour market, prices, businesses and national accounts."
     ),
     instructions=instructions,
     tools=[
