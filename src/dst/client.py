@@ -5,7 +5,6 @@ import pandas as pd
 import requests
 
 from models import RequestSpec
-from .models import DSTQuery
 
 
 class DSTClient:
@@ -34,19 +33,23 @@ class DSTClient:
         response.raise_for_status()
         return response.json()
 
-    def build_request(self, query: DSTQuery) -> RequestSpec:
-        variables = [
+    def build_request(
+        self,
+        table_id: str,
+        variables: dict[str, list[str]],
+    ) -> RequestSpec:
+        request_variables = [
             {"code": code, "values": values}
-            for code, values in query.variables.items()
+            for code, values in variables.items()
         ]
 
         return RequestSpec(
             method="POST",
             url=f"{self.BASE_URL}/data",
             json={
-                "table": query.table_id,
+                "table": table_id,
                 "format": "CSV",
-                "variables": variables,
+                "variables": request_variables,
             },
         )
 
