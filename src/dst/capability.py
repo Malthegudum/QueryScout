@@ -3,7 +3,6 @@ from pathlib import Path
 from pydantic_ai.capabilities import Capability
 
 from .client import DSTClient
-from .models import DSTQuery
 
 
 client = DSTClient()
@@ -27,14 +26,20 @@ def get_dst_table_metadata(table_id: str):
     """Get metadata for a DST table.
 
     Returns variables and valid values for the table.
-    Always inspect this before constructing a DSTQuery.
+    Always inspect this before constructing a query.
     """
     return client.table(table_id)
 
 
-def run_dst_query(query: DSTQuery):
-    """Run a DSTQuery and return the tested HTTP request, standalone code and a preview."""
-    request = client.build_request(query)
+def run_dst_query(
+    table_id: str,
+    variables: dict[str, list[str]],
+):
+    """Run a DST query and return the tested HTTP request, standalone code and a preview."""
+    request = client.build_request(
+        table_id=table_id,
+        variables=variables,
+    )
     data = client.execute(request)
 
     return {
