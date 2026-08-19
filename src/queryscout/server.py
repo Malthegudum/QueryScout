@@ -25,7 +25,6 @@ mcp = MCPServer(
         "Choose a source with enable_source, then follow the returned instructions."
     ),
     version="0.2.0",
-    stateless_http=True,
 )
 
 
@@ -57,6 +56,7 @@ def main() -> None:
         transport="streamable-http",
         host="127.0.0.1",
         port=8000,
+        stateless_http=True,
         json_response=True,
     )
 
