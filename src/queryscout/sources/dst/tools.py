@@ -24,6 +24,7 @@ def run_dst_query(table_id: str, variables: dict[str, list[str]]):
     """Query a Statistics Denmark table using verified variable/value codes."""
     request, csv_bytes, rows = client.query(table_id, variables)
     code = client.to_python(request)
+    power_query = client.to_power_query(request)
 
     result_id = results.save_result(
         source="dst",
@@ -31,6 +32,7 @@ def run_dst_query(table_id: str, variables: dict[str, list[str]]):
         request=request,
         csv_bytes=csv_bytes,
         code=code,
+        power_query=power_query,
         rows=rows,
     )
 
@@ -74,6 +76,6 @@ def register(mcp):
         description=(
             "Retrieve data from a Statistics Denmark table. The tool returns a "
             "small preview for validation and a local result URL for the full "
-            "CSV and deterministic Python code."
+            "CSV plus deterministic Python and Power Query code."
         ),
     )

@@ -2,6 +2,7 @@
 
 from io import StringIO
 import csv
+import json
 from pprint import pformat
 
 import requests
@@ -73,4 +74,33 @@ response.raise_for_status()
 
 with open("data.csv", "wb") as file:
     file.write(response.content)
+'''
+
+
+def to_power_query(request: dict) -> str:
+    """Generate deterministic Power Query M code from the exact HTTP request."""
+    url = str(request["url"]).replace('"', '""')
+    payload = json.dumps(
+        request["json"],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).replace('"', '""')
+
+    return f'''let
+    Url = "{url}",
+    Body = "{payload}",
+    Response = Web.Contents(
+        Url,
+        [
+            Headers = [#"Content-Type" = "application/json"],
+            Content = Text.ToBinary(Body)
+        ]
+    ),
+    Csv = Csv.Document(
+        Response,
+        [Delimiter = ";", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]
+    ),
+    Data = Table.PromoteHeaders(Csv, [PromoteAllScalars = true])
+in
+    Data
 '''

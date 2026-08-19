@@ -20,6 +20,7 @@ def save_result(
     request: dict[str, Any],
     csv_bytes: bytes,
     code: str,
+    power_query: str,
     rows: list[dict[str, str]],
 ) -> str:
     """Persist one deterministic query result and return its result ID."""
@@ -48,6 +49,7 @@ def save_result(
 
     (output_dir / "data.csv").write_bytes(csv_bytes)
     (output_dir / "query.py").write_text(code, encoding="utf-8")
+    (output_dir / "powerquery.m").write_text(power_query, encoding="utf-8")
     (output_dir / "metadata.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -72,7 +74,7 @@ def _result_dir(result_id: str) -> Path:
 
 
 def result_file(result_id: str, filename: str) -> Path:
-    if filename not in {"data.csv", "query.py", "metadata.json"}:
+    if filename not in {"data.csv", "query.py", "powerquery.m", "metadata.json"}:
         raise FileNotFoundError(filename)
 
     path = _result_dir(result_id) / filename
@@ -92,6 +94,7 @@ def render_result_page(result_id: str) -> str:
     """Render the stored result as a standalone local HTML page."""
     metadata = _metadata(result_id)
     code = result_file(result_id, "query.py").read_text(encoding="utf-8")
+    power_query = result_file(result_id, "powerquery.m").read_text(encoding="utf-8")
 
     columns = metadata["columns"]
     preview = metadata["preview"]
@@ -118,10 +121,8 @@ def render_result_page(result_id: str) -> str:
             + "</tbody></table></div>"
         )
 
-    request_json = escape(
-        json.dumps(metadata["request"], ensure_ascii=False, indent=2)
-    )
     code_html = escape(code)
+    power_query_html = escape(power_query)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -137,7 +138,7 @@ def render_result_page(result_id: str) -> str:
     }}
     body {{
       margin: 0;
-      padding: 32px;
+      padding: 28px;
     }}
     main {{
       max-width: 1200px;
@@ -150,8 +151,9 @@ def render_result_page(result_id: str) -> str:
       padding: 24px;
       margin-bottom: 18px;
     }}
-    h1, h2 {{
+    h1 {{
       margin-top: 0;
+      margin-bottom: 22px;
     }}
     .meta {{
       display: flex;
@@ -160,9 +162,6 @@ def render_result_page(result_id: str) -> str:
       color: #525252;
     }}
     .actions {{
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
       margin-top: 18px;
     }}
     a.button {{
@@ -174,9 +173,43 @@ def render_result_page(result_id: str) -> str:
       text-decoration: none;
       font-weight: 600;
     }}
-    a.button.secondary {{
-      background: #ededed;
+    .tabs-card {{
+      padding: 0;
+      overflow: hidden;
+    }}
+    .tabs {{
+      display: flex;
+      gap: 2px;
+      padding: 0 16px;
+      border-bottom: 1px solid #e5e5e5;
+      background: #fafafa;
+    }}
+    .tab {{
+      appearance: none;
+      border: 0;
+      background: transparent;
+      padding: 15px 18px 13px;
+      font: inherit;
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
+      color: #525252;
+      border-bottom: 3px solid transparent;
+    }}
+    .tab:hover {{
       color: #171717;
+    }}
+    .tab.active {{
+      color: #171717;
+      border-bottom-color: #171717;
+      background: white;
+    }}
+    .tab-panel {{
+      display: none;
+      padding: 24px;
+    }}
+    .tab-panel.active {{
+      display: block;
     }}
     .table-wrap {{
       overflow-x: auto;
@@ -197,14 +230,33 @@ def render_result_page(result_id: str) -> str:
       position: sticky;
       top: 0;
     }}
+    .code-wrap {{
+      position: relative;
+    }}
     pre {{
       overflow-x: auto;
       background: #111827;
       color: #f9fafb;
       border-radius: 10px;
-      padding: 16px;
+      padding: 18px;
+      padding-top: 48px;
       line-height: 1.5;
       font-size: 13px;
+      margin: 0;
+    }}
+    .copy {{
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      z-index: 1;
+      border: 1px solid #4b5563;
+      border-radius: 7px;
+      padding: 6px 10px;
+      background: #1f2937;
+      color: white;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
     }}
     .muted {{
       color: #737373;
@@ -222,26 +274,59 @@ def render_result_page(result_id: str) -> str:
     </div>
     <div class="actions">
       <a class="button" href="/results/{result_id}/data.csv">Download CSV</a>
-      <a class="button secondary" href="/results/{result_id}/query.py">Download Python</a>
     </div>
   </section>
 
-  <section class="card">
-    <h2>Preview</h2>
-    <p class="muted">Showing up to 20 rows.</p>
-    {table}
-  </section>
+  <section class="card tabs-card">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="preview" role="tab">Preview</button>
+      <button class="tab" data-tab="python" role="tab">Python</button>
+      <button class="tab" data-tab="powerquery" role="tab">Power Query</button>
+    </div>
 
-  <section class="card">
-    <h2>Reproduce with Python</h2>
-    <pre><code>{code_html}</code></pre>
-  </section>
+    <div id="preview" class="tab-panel active" role="tabpanel">
+      <p class="muted">Showing up to 20 rows.</p>
+      {table}
+    </div>
 
-  <section class="card">
-    <h2>Request</h2>
-    <pre><code>{request_json}</code></pre>
+    <div id="python" class="tab-panel" role="tabpanel">
+      <div class="code-wrap">
+        <button class="copy" data-copy="python-code">Copy</button>
+        <pre><code id="python-code">{code_html}</code></pre>
+      </div>
+    </div>
+
+    <div id="powerquery" class="tab-panel" role="tabpanel">
+      <div class="code-wrap">
+        <button class="copy" data-copy="powerquery-code">Copy</button>
+        <pre><code id="powerquery-code">{power_query_html}</code></pre>
+      </div>
+    </div>
   </section>
 </main>
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.tab-panel');
+
+  tabs.forEach((tab) => {{
+    tab.addEventListener('click', () => {{
+      tabs.forEach((item) => item.classList.remove('active'));
+      panels.forEach((panel) => panel.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.tab).classList.add('active');
+    }});
+  }});
+
+  document.querySelectorAll('.copy').forEach((button) => {{
+    button.addEventListener('click', async () => {{
+      const code = document.getElementById(button.dataset.copy).innerText;
+      await navigator.clipboard.writeText(code);
+      const oldText = button.textContent;
+      button.textContent = 'Copied';
+      setTimeout(() => button.textContent = oldText, 1200);
+    }});
+  }});
+</script>
 </body>
 </html>
 """
