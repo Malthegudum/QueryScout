@@ -1,7 +1,6 @@
-"""Public QueryScout package API."""
+"""QueryScout: an extensible MCP server for statistical data APIs."""
 
-from .agent import QueryNeedsClarification, query
-from .models import QueryScoutResult, RequestSpec
-from .session import QueryScoutSession
+from .registry import get_source, get_sources
+from .source import SourceSpec, ToolSpec
 
-__all__ = ["query", "QueryScoutSession", "QueryNeedsClarification", "QueryScoutResult", "RequestSpec"]
+__all__ = ["SourceSpec", "ToolSpec", "get_source", "get_sources"]

@@ -4,24 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "queryscout"
-version = "0.1.0"
-description = "AI assistant for querying statistical APIs"
+version = "0.2.0"
+description = "Extensible MCP server for statistical data APIs"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 
 dependencies = [
-    "requests",
+    "mcp>=2,<3",
     "pandas",
     "pydantic",
-    "pydantic-ai",
-    "python-dotenv",
-    "streamlit",
-    "uvicorn",
+    "requests",
 ]
+
+[project.scripts]
+queryscout = "queryscout.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"queryscout.sources.dst" = ["instructions.md"]
+"*" = ["instructions.md"]

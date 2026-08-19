@@ -1,29 +1,45 @@
 # QueryScout
 
-QueryScout retrieves statistical datasets from natural-language requests.
+QueryScout is an extensible **Model Context Protocol (MCP) server** for statistical data APIs.
 
-The idea is simple: use an AI agent to find and verify the right dataset once, then make the result reusable without the agent. QueryScout currently supports **Statistics Denmark (DST / StatBank)**.
+It is designed to run locally and expose well-defined statistical tools to MCP clients such as Open WebUI. QueryScout does not contain its own LLM agent. The model in the MCP client chooses and calls the tools.
 
-## How it works
+Statistics Denmark / StatBank is the first source.
+
+## Architecture
 
 ```text
-Natural-language request
-        ↓
-    QueryScout
-        ↓
-find + inspect + test source
-        ↓
- verified HTTP request
-        ↓
- retrieve dataset
-        ↓
- result
- ├── pandas DataFrame
- ├── tested HTTP request
- └── standalone Python code
+Open WebUI / other MCP client
+            |
+            | MCP (Streamable HTTP)
+            v
+       QueryScout
+            |
+      source registry
+       /    |    \
+     DST  Eurostat  ...
+      |
+      v
+Statistics Denmark API
 ```
 
-The generated Python uses ordinary `requests` and `pandas`. It does not import QueryScout, so the same dataset can be retrieved later without an LLM.
+Each source owns its API client, MCP tools, and instruction set:
+
+```text
+src/queryscout/
+├── instructions.md
+├── registry.py
+├── server.py
+├── source.py
+└── sources/
+    └── dst/
+        ├── __init__.py
+        ├── client.py
+        ├── instructions.md
+        └── tools.py
+```
+
+QueryScout automatically discovers source packages that export a `SOURCE` object.
 
 ## Installation
 
@@ -32,111 +48,118 @@ QueryScout requires Python 3.11 or newer.
 ```bash
 git clone https://github.com/Malthegudum/QueryScout.git
 cd QueryScout
+git checkout mcp-rewrite
+
 python -m venv .venv
+```
+
+Activate the environment, then install QueryScout:
+
+```bash
 pip install -e .
 ```
 
-Activate the virtual environment and create a `.env` file in the project root containing your OpenAI API key.
-
-## Local chat interface
-
-The easiest way to use QueryScout is the local Streamlit chat:
+## Run the MCP server
 
 ```bash
-streamlit run src/queryscout/web/app.py
+queryscout
 ```
 
-The browser interface lets you describe the dataset you want, answer clarification questions, inspect the resulting table, download it as CSV, and see standalone Python code for retrieving the same data again.
+or:
 
-## Python API
-
-```python
-from queryscout import query
-
-result = query("Hent Danmarks befolkning fra 2020 og frem")
-
-print(result.data)
-print(result.request)
-print(result.code)
+```bash
+python -m queryscout.server
 ```
 
-`result.data` is the retrieved pandas `DataFrame`.
-
-Save only the dataset:
-
-```python
-result.to_csv("data.csv")
-```
-
-Or save the dataset and reproducibility metadata:
-
-```python
-result.save("population")
-```
-
-This creates:
+The server listens locally at:
 
 ```text
-population/
-├── data.csv
-└── query.json
+http://127.0.0.1:8000/mcp
 ```
 
-`query.json` contains the source, tested HTTP request, and standalone Python code.
+It uses MCP Streamable HTTP.
 
-## Multi-turn conversations
+### Open WebUI
 
-```python
-from queryscout import QueryScoutSession
+In Open WebUI, add an external tool server with:
 
-session = QueryScoutSession()
+- Type: `MCP (Streamable HTTP)`
+- URL: `http://127.0.0.1:8000/mcp`
 
-response = session.send("Jeg vil have arbejdsløshed i Danmark")
-print(response)
+Open WebUI and QueryScout must be running on the same machine for that URL to work as written.
 
-response = session.send("Fordelt på kommuner siden 2020")
+## Available tools
 
-if not isinstance(response, str):
-    print(response.data)
-```
+QueryScout provides two general tools:
 
-`QueryScoutSession` keeps message history, allowing follow-up messages and clarification questions.
+- `queryscout_list_sources`
+- `queryscout_source_instructions`
 
-## Architecture
+The Statistics Denmark source currently provides:
+
+- `dst_search_tables`
+- `dst_get_table_metadata`
+- `dst_query_table`
+
+The intended DST workflow is:
 
 ```text
-src/queryscout/
-├── __init__.py
-├── agent.py
-├── models.py
-├── session.py
-├── sources/
-│   └── dst/
-│       ├── capability.py
-│       ├── client.py
-│       └── instructions.md
-└── web/
-    └── app.py
+dst_search_tables
+        ↓
+dst_get_table_metadata
+        ↓
+dst_query_table
+        ↓
+inspect preview and revise if necessary
 ```
 
-The main agent is mostly source-agnostic. Each source owns its API-specific discovery, metadata, request construction, execution, parsing, and standalone-code generation.
+The source-specific instructions explicitly require metadata inspection before querying and prohibit invented table, variable, or value codes.
 
-The complete dataset is not passed through the language model. The agent discovers and verifies a request; QueryScout then executes that verified request deterministically to produce the final DataFrame.
+## Adding another API
 
-## Adding another source
-
-A source can follow the same small structure:
+Create a new package under `src/queryscout/sources/`:
 
 ```text
 sources/
-└── example/
-    ├── capability.py
+└── eurostat/
+    ├── __init__.py
     ├── client.py
-    └── instructions.md
+    ├── instructions.md
+    └── tools.py
 ```
 
-Different APIs do not need to share one universal query model. Each source can use the arguments and parsing logic appropriate for its API.
+`client.py` contains deterministic API access. `tools.py` contains small, LLM-friendly functions. `instructions.md` contains the workflow and rules that are unique to the API.
+
+The package must export a `SOURCE` object:
+
+```python
+from queryscout.source import SourceSpec, ToolSpec
+
+SOURCE = SourceSpec(
+    id="example",
+    name="Example Statistics API",
+    description="What this source is useful for.",
+    instructions=instructions,
+    tools=(
+        ToolSpec(
+            name="example_search",
+            function=search,
+            description="Search datasets in the Example API.",
+        ),
+    ),
+)
+```
+
+The registry discovers it automatically at startup. Its instructions are included in the MCP server instructions, and its tools are registered on the server.
+
+## Design principles
+
+- **MCP-first:** QueryScout is a tool server, not a second LLM agent.
+- **Source-specific behavior:** each API keeps its own workflow and rules.
+- **Verified identifiers:** models should inspect source metadata rather than invent codes.
+- **Compact results:** query tools return row counts, columns, previews, exact HTTP requests, and reproducible code instead of pushing whole datasets into model context.
+- **Extensible:** adding an API should require a new source package, not changes to the MCP core.
 
 ## Status
 
-QueryScout is an early-stage project focused on making statistical data retrieval simple, verifiable, and reproducible.
+QueryScout is an early-stage project. The MCP-first rewrite currently focuses on Statistics Denmark as the reference source.

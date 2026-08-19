@@ -1,1 +1,1 @@
-"""Data-source integrations bundled with QueryScout."""
+"""Statistical API integrations for QueryScout."""
