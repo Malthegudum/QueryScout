@@ -63,17 +63,19 @@ def query(table_id: str, variables: dict[str, list[str]]):
 
 
 def to_python(request: dict) -> str:
-    """Generate standalone Python code from the exact HTTP request."""
+    """Generate standalone Python code that loads the result into a DataFrame."""
     request_literal = pformat(request, width=88, sort_dicts=False)
-    return f'''import requests
+    return f'''from io import StringIO
+
+import pandas as pd
+import requests
 
 request = {request_literal}
 
 response = requests.request(**request)
 response.raise_for_status()
 
-with open("data.csv", "wb") as file:
-    file.write(response.content)
+df = pd.read_csv(StringIO(response.text), sep=";")
 '''
 
 
