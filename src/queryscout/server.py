@@ -16,14 +16,13 @@ SOURCE_LIST = "\n".join(
     for name, (_, description) in SOURCES.items()
 )
 
+SERVER_INSTRUCTIONS = Path(__file__).with_name("instructions.md").read_text(
+    encoding="utf-8"
+)
+
 mcp = MCPServer(
     "QueryScout",
-    instructions=(
-        "QueryScout provides access to statistical APIs.\n\n"
-        f"Available sources:\n{SOURCE_LIST}\n\n"
-        "Before using a source, call enable_source to load its instructions. "
-        "All source tools are already available."
-    ),
+    instructions=f"{SERVER_INSTRUCTIONS}\n\nAvailable sources:\n{SOURCE_LIST}",
     version="0.2.0",
 )
 
@@ -48,7 +47,10 @@ def enable_source(source: str) -> str:
 mcp.add_tool(
     enable_source,
     name="enable_source",
-    description="Return instructions for one of the sources listed in the server instructions.",
+    description=(
+        "Load the mandatory instructions for one source before using any of "
+        "that source's tools."
+    ),
 )
 
 
