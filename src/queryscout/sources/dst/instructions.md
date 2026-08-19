@@ -48,7 +48,7 @@ DST supports special value selectors in many StatBank queries:
 - Ordered values such as periods can use range syntax, for example `">=2020K1<=2024K4"`.
 - A bounded range must be written as **one value**. Do not write:
   `[">=2020K1", "<=2024K4"]`
-  because DST interprets those as separate selections rather than one interval.
+  because DST interprets those as separate selections rather than one interval. Only upper bound the period if specified.
 - `"(1)"` selects the newest value/period where supported.
 - If no time value is selected, DST may default to the newest period depending on the endpoint/table. Do not rely on that behavior when the user requested a specific period.
 
@@ -69,7 +69,7 @@ A bounded quarterly time range:
 
 ```json
 {
-  "Tid": [">=2020K1<=2024K4"]
+  "Tid": [">=2020K1"]
 }
 ```
 
