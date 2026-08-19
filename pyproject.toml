@@ -21,4 +21,5 @@ queryscout = "queryscout.server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
+"queryscout" = ["instructions.md"]
 "queryscout.sources.dst" = ["instructions.md"]
