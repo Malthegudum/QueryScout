@@ -9,14 +9,19 @@ from queryscout.sources.dst import tools as dst
 
 
 SOURCES = {
-    "dst": dst,
+    "dst": (dst, "Official Danish statistics from StatBank Denmark."),
 }
 
+SOURCE_LIST = "\n".join(
+    f"- {name}: {description}"
+    for name, (_, description) in SOURCES.items()
+)
 
 mcp = MCPServer(
     "QueryScout",
     instructions=(
-        "QueryScout provides access to statistical APIs. "
+        "QueryScout provides access to statistical APIs.\n\n"
+        f"Available sources:\n{SOURCE_LIST}\n\n"
         "Choose a source with enable_source, then follow the returned instructions."
     ),
     version="0.2.0",
@@ -29,7 +34,7 @@ async def enable_source(source: str, ctx: Context) -> str:
     if source not in SOURCES:
         raise ValueError(f"Unknown source: {source}")
 
-    module = SOURCES[source]
+    module, _ = SOURCES[source]
     module.register(mcp)
     await ctx.notify_tools_changed()
 
@@ -43,7 +48,7 @@ async def enable_source(source: str, ctx: Context) -> str:
 mcp.add_tool(
     enable_source,
     name="enable_source",
-    description="Enable one source. Available sources: dst.",
+    description="Enable one of the sources listed in the server instructions.",
 )
 
 
