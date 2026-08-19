@@ -1,5 +1,7 @@
 """MCP tools for Statistics Denmark."""
 
+from queryscout import results
+
 from . import client
 
 
@@ -20,13 +22,27 @@ def get_dst_table_metadata(table_id: str):
 
 def run_dst_query(table_id: str, variables: dict[str, list[str]]):
     """Query a Statistics Denmark table using verified variable/value codes."""
-    request, rows = client.query(table_id, variables)
+    request, csv_bytes, rows = client.query(table_id, variables)
+    code = client.to_python(request)
+
+    result_id = results.save_result(
+        source="dst",
+        title=f"Statistics Denmark — {table_id}",
+        request=request,
+        csv_bytes=csv_bytes,
+        code=code,
+        rows=rows,
+    )
+
     return {
         "source": "dst",
+        "table_id": table_id,
         "request": request,
         "row_count": len(rows),
         "columns": list(rows[0]) if rows else [],
         "preview": rows[:10],
+        "result_url": results.result_url(result_id),
+        "result_id": result_id,
     }
 
 
@@ -56,7 +72,8 @@ def register(mcp):
         run_dst_query,
         name="run_dst_query",
         description=(
-            "Retrieve data from a Statistics Denmark table using only verified "
-            "table, variable and value codes."
+            "Retrieve data from a Statistics Denmark table. The tool returns a "
+            "small preview for validation and a local result URL for the full "
+            "CSV and deterministic Python code."
         ),
     )

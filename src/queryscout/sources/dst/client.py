@@ -2,6 +2,7 @@
 
 from io import StringIO
 import csv
+from pprint import pformat
 
 import requests
 
@@ -32,7 +33,10 @@ def table(table_id: str):
     return response.json()
 
 
-def query(table_id: str, variables: dict[str, list[str]]):
+def build_request(
+    table_id: str,
+    variables: dict[str, list[str]],
+) -> dict:
     payload = {
         "table": table_id,
         "format": "CSV",
@@ -41,8 +45,32 @@ def query(table_id: str, variables: dict[str, list[str]]):
             for code, values in variables.items()
         ],
     }
-    response = requests.post(f"{BASE_URL}/data", json=payload, timeout=60)
+    return {
+        "method": "POST",
+        "url": f"{BASE_URL}/data",
+        "json": payload,
+    }
+
+
+def query(table_id: str, variables: dict[str, list[str]]):
+    request = build_request(table_id, variables)
+    response = requests.request(**request, timeout=60)
     response.raise_for_status()
 
     rows = list(csv.DictReader(StringIO(response.text), delimiter=";"))
-    return payload, rows
+    return request, response.content, rows
+
+
+def to_python(request: dict) -> str:
+    """Generate standalone Python code from the exact HTTP request."""
+    request_literal = pformat(request, width=88, sort_dicts=False)
+    return f'''import requests
+
+request = {request_literal}
+
+response = requests.request(**request)
+response.raise_for_status()
+
+with open("data.csv", "wb") as file:
+    file.write(response.content)
+'''

@@ -10,6 +10,8 @@ Statistics Denmark / StatBank is the first source.
 
 ```text
 src/queryscout/
+├── instructions.md
+├── results.py
 ├── server.py
 └── sources/
     └── dst/
@@ -20,9 +22,11 @@ src/queryscout/
 
 Each source has only three files:
 
-- `client.py` — direct API calls
+- `client.py` — direct API calls and deterministic request/code generation
 - `tools.py` — MCP tools and registration
 - `instructions.md` — source-specific workflow and rules
+
+`results.py` is shared infrastructure for storing query outputs and rendering local result pages.
 
 ## Installation
 
@@ -70,23 +74,40 @@ It uses MCP Streamable HTTP.
 
 All source tools are registered when QueryScout starts, so MCP clients such as Open WebUI can see them immediately.
 
-QueryScout also exposes:
+QueryScout also exposes `enable_source`. It only returns the selected source's `instructions.md`; the server instructions require the model to call it before using that source's tools.
 
-- `enable_source`
+## Query results
 
-`enable_source` does not register tools. It only returns the selected source's `instructions.md`, so the model can follow the source-specific workflow and rules.
+QueryScout deliberately separates model validation from the full output.
 
-For example:
+`run_dst_query` returns only a compact result to the model:
+
+- the exact request;
+- row count;
+- column names;
+- a 10-row preview;
+- a local `result_url`.
+
+The model uses that preview to check whether the query returned the intended concepts, units, geography and periods. If the preview looks wrong, it should revise the query.
+
+The full result is stored locally under:
 
 ```text
-enable_source("dst")
-        ↓
-DST instructions are returned
-        ↓
-use the already-available DST tools
+~/.queryscout/results/<result-id>/
+├── data.csv
+├── metadata.json
+└── query.py
 ```
 
-The server instructions include a short list of all available sources and descriptions.
+The full CSV and deterministic Python code are **not** included in the MCP tool result. They are served directly by QueryScout at:
+
+```text
+http://127.0.0.1:8000/results/<result-id>
+```
+
+The result page shows a larger preview, the exact request and generated Python code, with direct downloads for `data.csv` and `query.py`.
+
+The result ID is derived from the exact request and returned CSV bytes, so a changed dataset produces a different result ID even if the query is otherwise unchanged.
 
 ## Open WebUI
 
@@ -97,6 +118,8 @@ http://127.0.0.1:8000/mcp
 ```
 
 Because all source tools are registered at startup, Open WebUI does not need to refresh the MCP tool list after `enable_source` is called.
+
+After a successful query, the model can validate the compact preview and provide the local QueryScout result URL. Opening that URL displays the result UI directly from QueryScout rather than sending the full dataset or Python code through the model.
 
 ## Statistics Denmark tools
 
@@ -110,6 +133,8 @@ The DST source exposes:
 The intended workflow is:
 
 ```text
+enable_source("dst")
+        ↓
 get_dst_subjects
         ↓
 get_dst_tables
@@ -118,10 +143,16 @@ get_dst_table_metadata
         ↓
 run_dst_query
         ↓
-inspect the result and revise if necessary
+validate the compact preview
+        ↓
+open the local result page
 ```
 
-The source instructions require metadata inspection before querying and prohibit invented table IDs, variable codes, and value codes.
+## Deterministic Python code
+
+DST queries are represented as ordinary request dictionaries. `client.py` deterministically converts the exact executed request into standalone Python code. No LLM generates or rewrites that code.
+
+The generated script replays the same HTTP request and writes the returned bytes to `data.csv`.
 
 ## Adding another API
 
@@ -146,6 +177,6 @@ SOURCES = {
 }
 ```
 
-All tools registered by the new source's `register(mcp)` function will then be available when QueryScout starts.
+A new source can reuse `queryscout.results.save_result(...)` to get the same local result page/download behavior.
 
 No registry, plugin framework, shared source model, or automatic discovery is required.

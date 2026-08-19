@@ -13,7 +13,8 @@ Follow this order unless the user already gives an exact, verified table ID and 
 5. From the metadata, identify the exact variable codes and allowed value codes.
 6. Construct the smallest query that answers the user's question.
 7. Use `run_dst_query(table_id, variables)` with only verified codes and supported DST value syntax.
-8. Inspect the returned columns, row count and preview. If the result does not match the intended concepts, units, geography or periods, revise the query before answering.
+8. Inspect the returned request, columns, row count and 10-row preview. If the result does not match the intended concepts, units, geography or periods, revise the query and run it again.
+9. Only after the preview is plausible should you present the returned `result_url` as the completed result. The full CSV and deterministic Python code are available there directly from QueryScout.
 
 Do not jump directly to `run_dst_query` from the user's wording.
 
@@ -84,7 +85,9 @@ These are syntax examples only. Always use the actual variable codes from `get_d
 
 ## Validation after querying
 
-Before using the result in the final answer, verify:
+The model-facing `run_dst_query` result is intentionally compact. It contains the exact request, row count, columns, a 10-row preview and a local `result_url`.
+
+Before treating the result as complete, verify from that compact result that:
 
 - the table is the intended table;
 - the requested geography/population/category is represented correctly;
@@ -94,3 +97,5 @@ Before using the result in the final answer, verify:
 - the row count and preview are plausible for the requested selection.
 
 If any of these are unclear, inspect metadata again or revise the query.
+
+Do not reproduce the full CSV or regenerate the Python code in the answer. Once validated, send the user to `result_url`, where QueryScout serves the full CSV, a larger preview, the exact request and deterministically generated Python code.

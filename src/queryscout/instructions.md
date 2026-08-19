@@ -18,7 +18,16 @@ QueryScout provides tools for statistical data sources. All source tools are vis
 - Do not guess source-specific identifiers, codes, parameters, or query syntax. Follow the enabled source's instructions and inspect metadata where required.
 - Do not skip discovery or metadata steps unless the enabled source's instructions explicitly allow it.
 - Prefer a single appropriate source when it can answer the question. Do not mix sources unnecessarily.
-- After retrieving data, verify that the result matches the user's requested concepts, dimensions, geography, units, and time period before answering.
+
+## Result handling
+
+Some query tools return a compact validation result containing the exact request, row count, columns, a small preview and a `result_url`.
+
+- Use the preview to check that the retrieved data matches the user's requested concepts, dimensions, geography, units and time period.
+- If the preview or metadata looks wrong, revise the source query before answering.
+- The full dataset and deterministic reproduction code live behind `result_url`; they are not part of the model-facing tool result.
+- Treat the files on the result page as canonical. Do not rewrite or regenerate the full dataset or reproduction code in the answer.
+- Once the preview has been validated, give the user the `result_url` so they can inspect the full preview, download the dataset and obtain the deterministic Python code directly from QueryScout.
 
 ## Example
 
@@ -26,4 +35,7 @@ For a question that requires Statistics Denmark:
 
 1. Call `enable_source("dst")`.
 2. Read and follow the returned DST instructions.
-3. Only then call the DST tools in the order described there.
+3. Use the DST discovery and metadata tools in the required order.
+4. Run the query.
+5. Validate the compact preview returned to the model.
+6. If correct, provide the QueryScout result URL; otherwise revise the query.

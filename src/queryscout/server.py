@@ -3,7 +3,10 @@
 from pathlib import Path
 
 from mcp.server import MCPServer
+from starlette.requests import Request
+from starlette.responses import FileResponse, HTMLResponse, PlainTextResponse
 
+from queryscout import results
 from queryscout.sources.dst import tools as dst
 
 
@@ -52,6 +55,50 @@ mcp.add_tool(
         "that source's tools."
     ),
 )
+
+
+@mcp.custom_route("/results/{result_id}", methods=["GET"])
+async def result_page(request: Request):
+    result_id = request.path_params["result_id"]
+    try:
+        page = results.render_result_page(result_id)
+    except FileNotFoundError:
+        return PlainTextResponse("Result not found.", status_code=404)
+
+    return HTMLResponse(
+        page,
+        headers={"Content-Disposition": "inline"},
+    )
+
+
+@mcp.custom_route("/results/{result_id}/data.csv", methods=["GET"])
+async def download_data(request: Request):
+    result_id = request.path_params["result_id"]
+    try:
+        path = results.result_file(result_id, "data.csv")
+    except FileNotFoundError:
+        return PlainTextResponse("Result not found.", status_code=404)
+
+    return FileResponse(
+        path,
+        media_type="text/csv",
+        filename="data.csv",
+    )
+
+
+@mcp.custom_route("/results/{result_id}/query.py", methods=["GET"])
+async def download_code(request: Request):
+    result_id = request.path_params["result_id"]
+    try:
+        path = results.result_file(result_id, "query.py")
+    except FileNotFoundError:
+        return PlainTextResponse("Result not found.", status_code=404)
+
+    return FileResponse(
+        path,
+        media_type="text/x-python",
+        filename="query.py",
+    )
 
 
 def main() -> None:
