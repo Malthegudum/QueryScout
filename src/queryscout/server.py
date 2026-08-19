@@ -3,7 +3,6 @@
 from pathlib import Path
 
 from mcp.server import MCPServer
-from mcp.server.mcpserver import Context
 
 from queryscout.sources.dst import tools as dst
 
@@ -22,21 +21,23 @@ mcp = MCPServer(
     instructions=(
         "QueryScout provides access to statistical APIs.\n\n"
         f"Available sources:\n{SOURCE_LIST}\n\n"
-        "Choose a source with enable_source, then follow the returned instructions."
+        "Before using a source, call enable_source to load its instructions. "
+        "All source tools are already available."
     ),
     version="0.2.0",
 )
 
 
-async def enable_source(source: str, ctx: Context) -> str:
-    """Enable a statistical API and return its instructions."""
+for module, _ in SOURCES.values():
+    module.register(mcp)
+
+
+def enable_source(source: str) -> str:
+    """Return the instructions for a statistical API source."""
     if source not in SOURCES:
         raise ValueError(f"Unknown source: {source}")
 
     module, _ = SOURCES[source]
-    module.register(mcp)
-    await ctx.notify_tools_changed()
-
     return (
         Path(module.__file__)
         .with_name("instructions.md")
@@ -47,7 +48,7 @@ async def enable_source(source: str, ctx: Context) -> str:
 mcp.add_tool(
     enable_source,
     name="enable_source",
-    description="Enable one of the sources listed in the server instructions.",
+    description="Return instructions for one of the sources listed in the server instructions.",
 )
 
 
