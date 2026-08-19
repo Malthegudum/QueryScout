@@ -66,23 +66,27 @@ http://127.0.0.1:8000/mcp
 
 It uses MCP Streamable HTTP.
 
-## Source activation
+## Sources and tools
 
-At startup, QueryScout exposes only:
+All source tools are registered when QueryScout starts, so MCP clients such as Open WebUI can see them immediately.
+
+QueryScout also exposes:
 
 - `enable_source`
 
-The model calls it with a source ID, for example:
+`enable_source` does not register tools. It only returns the selected source's `instructions.md`, so the model can follow the source-specific workflow and rules.
+
+For example:
 
 ```text
 enable_source("dst")
         ↓
 DST instructions are returned
         ↓
-DST tools become available
+use the already-available DST tools
 ```
 
-Available source IDs are listed in the `enable_source` tool description.
+The server instructions include a short list of all available sources and descriptions.
 
 ## Open WebUI
 
@@ -92,24 +96,27 @@ Add QueryScout as an MCP Streamable HTTP tool server using:
 http://127.0.0.1:8000/mcp
 ```
 
-When a source is enabled, QueryScout sends a tool-list-changed notification so compatible clients can refresh the available tools.
+Because all source tools are registered at startup, Open WebUI does not need to refresh the MCP tool list after `enable_source` is called.
 
 ## Statistics Denmark tools
 
-After enabling `dst`, QueryScout exposes:
+The DST source exposes:
 
-- `dst_search_tables`
-- `dst_get_table`
-- `dst_query`
+- `get_dst_subjects`
+- `get_dst_tables`
+- `get_dst_table_metadata`
+- `run_dst_query`
 
 The intended workflow is:
 
 ```text
-dst_search_tables
+get_dst_subjects
         ↓
-dst_get_table
+get_dst_tables
         ↓
-dst_query
+get_dst_table_metadata
+        ↓
+run_dst_query
         ↓
 inspect the result and revise if necessary
 ```
@@ -134,11 +141,11 @@ from queryscout.sources.dst import tools as dst
 from queryscout.sources.eurostat import tools as eurostat
 
 SOURCES = {
-    "dst": dst,
-    "eurostat": eurostat,
+    "dst": (dst, "Official Danish statistics from StatBank Denmark."),
+    "eurostat": (eurostat, "Official European Union statistics."),
 }
 ```
 
-Also update the `enable_source` tool description so the model can see the new source ID.
+All tools registered by the new source's `register(mcp)` function will then be available when QueryScout starts.
 
 No registry, plugin framework, shared source model, or automatic discovery is required.
