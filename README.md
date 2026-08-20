@@ -35,13 +35,7 @@ QueryScout requires Python 3.11 or newer.
 ```bash
 git clone https://github.com/Malthegudum/QueryScout.git
 cd QueryScout
-git checkout mcp-rewrite
 python -m venv .venv
-```
-
-Activate the environment and install QueryScout:
-
-```bash
 pip install -e .
 ```
 
