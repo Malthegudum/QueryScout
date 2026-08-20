@@ -7,7 +7,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, PlainTextResponse
 
 from queryscout import results, transforms
-from queryscout.sources import dst
+from queryscout.sources.dst import tools as dst
 
 
 SOURCES = {
@@ -41,7 +41,12 @@ def enable_source(source: str) -> str:
     if source not in SOURCES:
         raise ValueError(f"Unknown source: {source}")
 
-    return SOURCES[source].INSTRUCTIONS
+    module = SOURCES[source]
+    return (
+        Path(module.__file__)
+        .with_name("instructions.md")
+        .read_text(encoding="utf-8")
+    )
 
 
 mcp.add_tool(
