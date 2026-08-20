@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "queryscout"
-version = "0.2.0"
-description = "Simple MCP server for statistical APIs"
+version = "0.3.0"
+description = "Simple MCP server for statistical data"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -23,4 +23,3 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "queryscout" = ["instructions.md"]
-"queryscout.sources.dst" = ["instructions.md"]
