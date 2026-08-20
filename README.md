@@ -1,11 +1,8 @@
 # QueryScout
 
-QueryScout is a small local MCP server for retrieving and transforming
-statistical data.
+QueryScout is a small local MCP server for retrieving and transforming statistical data.
 
-The model chooses sources and transformation parameters. QueryScout performs all
-data operations itself and deterministically generates standalone Python that
-reproduces the complete pipeline.
+The model chooses sources and transformation parameters. QueryScout performs all data operations itself and deterministically generates standalone Python that reproduces the complete pipeline.
 
 ## Structure
 
@@ -17,18 +14,22 @@ src/queryscout/
 ├── transforms.py
 ├── codegen.py
 └── sources/
-    └── dst.py
+    └── dst/
+        ├── __init__.py
+        ├── client.py
+        ├── tools.py
+        └── instructions.md
 ```
 
 - `server.py` registers MCP tools and result routes.
-- `sources/dst.py` contains the Statistics Denmark integration.
-- `transforms.py` contains the allowed filter, select, group-by and join
-  operations.
+- `sources/dst/client.py` contains the Statistics Denmark API integration.
+- `sources/dst/tools.py` contains the DST MCP tools.
+- `sources/dst/instructions.md` contains the source-specific workflow.
+- `transforms.py` contains the allowed filter, select, group-by and join operations.
 - `results.py` stores datasets, previews and metadata.
 - `codegen.py` turns stored pipeline metadata into deterministic `query.py`.
 
-The implementation intentionally uses only a few runtime dependencies:
-`mcp`, `pandas` and `requests`.
+The implementation intentionally uses only a few runtime dependencies: `mcp`, `pandas` and `requests`.
 
 ## Run
 
@@ -61,8 +62,7 @@ next step
 final result
 ```
 
-The model sees a compact preview after every step so it can check that the
-operation was correct.
+The model sees a compact preview after every step so it can check that the operation was correct.
 
 Each step creates a result under:
 
@@ -73,8 +73,7 @@ Each step creates a result under:
 └── query.py
 ```
 
-`metadata.json` contains a simple nested description of the complete pipeline.
-`query.py` is generated from that description by QueryScout, not by the model.
+`metadata.json` contains a simple nested description of the complete pipeline. `query.py` is generated from that description by QueryScout, not by the model.
 
 ## Statistics Denmark
 
@@ -96,8 +95,6 @@ QueryScout currently exposes:
 - `group_by`
 - `join_results`
 
-Each transformation takes existing QueryScout result IDs, writes a new
-canonical result, and returns row counts, columns, dtypes and a preview for
-validation.
+Each transformation takes existing QueryScout result IDs, writes a new canonical result, and returns row counts, columns, dtypes and a preview for validation.
 
 No tool accepts arbitrary Python or SQL.
