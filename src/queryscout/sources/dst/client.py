@@ -1,10 +1,8 @@
 """Statistics Denmark API client."""
 
 from io import StringIO
-import csv
-import json
-from pprint import pformat
 
+import pandas as pd
 import requests
 
 
@@ -38,71 +36,27 @@ def build_request(
     table_id: str,
     variables: dict[str, list[str]],
 ) -> dict:
-    payload = {
-        "table": table_id,
-        "format": "CSV",
-        "variables": [
-            {"code": code, "values": values}
-            for code, values in variables.items()
-        ],
-    }
     return {
         "method": "POST",
         "url": f"{BASE_URL}/data",
-        "json": payload,
+        "json": {
+            "table": table_id,
+            "format": "CSV",
+            "variables": [
+                {"code": code, "values": values}
+                for code, values in variables.items()
+            ],
+        },
     }
 
 
-def query(table_id: str, variables: dict[str, list[str]]):
+def query(
+    table_id: str,
+    variables: dict[str, list[str]],
+) -> tuple[dict, pd.DataFrame]:
     request = build_request(table_id, variables)
     response = requests.request(**request, timeout=60)
     response.raise_for_status()
 
-    rows = list(csv.DictReader(StringIO(response.text), delimiter=";"))
-    return request, response.content, rows
-
-
-def to_python(request: dict) -> str:
-    """Generate standalone Python code that loads the result into a DataFrame."""
-    request_literal = pformat(request, width=88, sort_dicts=False)
-    return f'''from io import StringIO
-
-import pandas as pd
-import requests
-
-request = {request_literal}
-
-response = requests.request(**request)
-response.raise_for_status()
-
-df = pd.read_csv(StringIO(response.text), sep=";")
-'''
-
-
-def to_power_query(request: dict) -> str:
-    """Generate deterministic Power Query M code from the exact HTTP request."""
-    url = str(request["url"]).replace('"', '""')
-    payload = json.dumps(
-        request["json"],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).replace('"', '""')
-
-    return f'''let
-    Url = "{url}",
-    Body = "{payload}",
-    Response = Web.Contents(
-        Url,
-        [
-            Headers = [#"Content-Type" = "application/json"],
-            Content = Text.ToBinary(Body)
-        ]
-    ),
-    Csv = Csv.Document(
-        Response,
-        [Delimiter = ";", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]
-    ),
-    Data = Table.PromoteHeaders(Csv, [PromoteAllScalars = true])
-in
-    Data
-'''
+    dataframe = pd.read_csv(StringIO(response.text), sep=";")
+    return request, dataframe
