@@ -159,6 +159,7 @@ def build_request(
         "format": "csvdata",
         "formatVersion": "2.0",
         "labels": "id",
+        "compress": "false",
     }
 
     for dimension, values in dimensions.items():
