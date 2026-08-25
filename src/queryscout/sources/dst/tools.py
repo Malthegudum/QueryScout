@@ -33,6 +33,10 @@ def run_dst_query(
         "type": "source",
         "source": "dst",
         "request": request,
+        "parser": {
+            "type": "csv",
+            "kwargs": {"sep": ";"},
+        },
     }
 
     result_id = results.save_result(
