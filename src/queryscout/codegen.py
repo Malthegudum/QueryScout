@@ -99,19 +99,41 @@ def _emit_source(
     state: dict[str, int],
 ) -> str:
     source = step["source"]
-    if source != "dst":
-        raise ValueError(f"Unsupported source in code generation: {source}")
+    parser = step.get("parser")
+
+    # Backwards compatibility for results saved before parser metadata existed.
+    if parser is None:
+        if source == "dst":
+            parser = {
+                "type": "csv",
+                "kwargs": {"sep": ";"},
+            }
+        else:
+            raise ValueError(
+                f"Source {source!r} does not define a reproducible parser."
+            )
+
+    if parser.get("type") != "csv":
+        raise ValueError(f"Unsupported source parser: {parser.get('type')!r}")
 
     request_name = _new_name(state, "request")
     response_name = _new_name(state, "response")
     df_name = _new_name(state, "df")
     request = pformat(step["request"], width=88, sort_dicts=False)
+    parser_kwargs = pformat(
+        parser.get("kwargs", {}),
+        width=88,
+        sort_dicts=False,
+    )
 
     lines.extend([
         f"{request_name} = {request}",
         f"{response_name} = requests.request(**{request_name}, timeout=60)",
         f"{response_name}.raise_for_status()",
-        f'{df_name} = pd.read_csv(StringIO({response_name}.text), sep=";")',
+        (
+            f"{df_name} = pd.read_csv("
+            f"StringIO({response_name}.text), **{parser_kwargs})"
+        ),
     ])
     return df_name
 

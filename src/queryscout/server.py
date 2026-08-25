@@ -8,10 +8,12 @@ from starlette.responses import FileResponse, HTMLResponse, PlainTextResponse
 
 from queryscout import results, transforms
 from queryscout.sources.dst import tools as dst
+from queryscout.sources.eurostat import tools as eurostat
 
 
 SOURCES = {
     "dst": dst,
+    "eurostat": eurostat,
 }
 
 SOURCE_LIST = "\n".join(
