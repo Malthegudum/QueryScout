@@ -14,7 +14,12 @@ src/queryscout/
 ├── transforms.py
 ├── codegen.py
 └── sources/
-    └── dst/
+    ├── dst/
+    │   ├── __init__.py
+    │   ├── client.py
+    │   ├── tools.py
+    │   └── instructions.md
+    └── eurostat/
         ├── __init__.py
         ├── client.py
         ├── tools.py
@@ -22,9 +27,9 @@ src/queryscout/
 ```
 
 - `server.py` registers MCP tools and result routes.
-- `sources/dst/client.py` contains the Statistics Denmark API integration.
-- `sources/dst/tools.py` contains the DST MCP tools.
-- `sources/dst/instructions.md` contains the source-specific workflow.
+- `sources/dst/` contains the Statistics Denmark integration.
+- `sources/eurostat/` contains the Eurostat catalogue and SDMX integration.
+- Each source's `instructions.md` contains its source-specific workflow.
 - `transforms.py` contains the allowed filter, select, group-by and join operations.
 - `results.py` stores datasets, previews and metadata.
 - `codegen.py` turns stored pipeline metadata into deterministic `query.py`.
@@ -85,6 +90,19 @@ The DST source exposes:
 - `run_dst_query`
 
 Call `enable_source("dst")` before using them.
+
+## Eurostat
+
+The Eurostat source exposes:
+
+- `search_eurostat_datasets`
+- `get_eurostat_dataset_metadata`
+- `get_eurostat_dimension_values`
+- `run_eurostat_query`
+
+Call `enable_source("eurostat")` before using them.
+
+Dataset discovery uses Eurostat's catalogue API. Metadata and valid dimension codes come from SDMX structure queries, and data is retrieved as SDMX-CSV 2.0.
 
 ## Transformations
 
