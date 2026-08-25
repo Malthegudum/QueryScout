@@ -58,6 +58,24 @@ def _emit_step(
         ])
         return output
 
+    if step_type == "concat":
+        inputs = [_emit_step(item, lines, state) for item in step["inputs"]]
+        output = _new_name(state, "df")
+        columns = step["columns"]
+        aligned = ", ".join(
+            f"{input_df}.loc[:, {columns!r}]" for input_df in inputs
+        )
+        lines.extend([
+            "",
+            f"{output} = pd.concat(",
+            f"    [{aligned}],",
+            "    axis=0,",
+            "    ignore_index=True,",
+            "    sort=False,",
+            ")",
+        ])
+        return output
+
     input_df = _emit_step(step["input"], lines, state)
     output = _new_name(state, "df")
 
@@ -73,6 +91,85 @@ def _emit_step(
         lines.extend([
             "",
             f"{output} = {input_df}.loc[:, {step['columns']!r}].copy()",
+        ])
+        return output
+
+    if step_type == "sort":
+        lines.extend([
+            "",
+            f"{output} = (",
+            f"    {input_df}.sort_values(",
+            f"        by={step['by']!r},",
+            f"        ascending={step['ascending']!r},",
+            '        kind="stable",',
+            "    )",
+            "    .reset_index(drop=True)",
+            ")",
+        ])
+        return output
+
+    if step_type == "derive":
+        left = _operand_expression(input_df, step["left"])
+        right = _operand_expression(input_df, step["right"])
+        operators = {
+            "add": "+",
+            "subtract": "-",
+            "multiply": "*",
+            "divide": "/",
+        }
+        symbol = operators[step["operation"]]
+        lines.extend([
+            "",
+            f"{output} = {input_df}.copy()",
+            f"{output}[{step['output_column']!r}] = {left} {symbol} {right}",
+        ])
+        return output
+
+    if step_type == "time_change":
+        keys = step["by"] + [step["order_by"]]
+        lines.extend([
+            "",
+            f"{output} = (",
+            f"    {input_df}.sort_values(by={keys!r}, kind='stable')",
+            "    .reset_index(drop=True)",
+            "    .copy()",
+            ")",
+        ])
+        periods = step["periods"]
+        column = step["column"]
+        if step["by"]:
+            grouped = _new_name(state, "grouped")
+            lines.extend([
+                f"{grouped} = {output}.groupby(",
+                f"    {step['by']!r},",
+                "    dropna=False,",
+                "    sort=False,",
+                f")[{column!r}]",
+            ])
+            series = grouped
+        else:
+            series = f"{output}[{column!r}]"
+
+        if step["operation"] == "lag":
+            expression = f"{series}.shift({periods})"
+        elif step["operation"] == "difference":
+            expression = f"{series}.diff({periods})"
+        else:
+            expression = f"{series}.pct_change(periods={periods}, fill_method=None)"
+
+        lines.append(f"{output}[{step['output_column']!r}] = {expression}")
+        return output
+
+    if step_type == "pivot":
+        lines.extend([
+            "",
+            f"{output} = {input_df}.pivot(",
+            f"    index={step['index']!r},",
+            f"    columns={step['columns']!r},",
+            f"    values={step['values']!r},",
+            ").reset_index()",
+            f"{output}.columns.name = None",
+            f"{output}.columns = [str(column) for column in {output}.columns]",
         ])
         return output
 
@@ -101,13 +198,9 @@ def _emit_source(
     source = step["source"]
     parser = step.get("parser")
 
-    # Backwards compatibility for results saved before parser metadata existed.
     if parser is None:
         if source == "dst":
-            parser = {
-                "type": "csv",
-                "kwargs": {"sep": ";"},
-            }
+            parser = {"type": "csv", "kwargs": {"sep": ";"}}
         else:
             raise ValueError(
                 f"Source {source!r} does not define a reproducible parser."
@@ -120,22 +213,23 @@ def _emit_source(
     response_name = _new_name(state, "response")
     df_name = _new_name(state, "df")
     request = pformat(step["request"], width=88, sort_dicts=False)
-    parser_kwargs = pformat(
-        parser.get("kwargs", {}),
-        width=88,
-        sort_dicts=False,
-    )
+    parser_kwargs = pformat(parser.get("kwargs", {}), width=88, sort_dicts=False)
 
     lines.extend([
         f"{request_name} = {request}",
         f"{response_name} = requests.request(**{request_name}, timeout=60)",
         f"{response_name}.raise_for_status()",
-        (
-            f"{df_name} = pd.read_csv("
-            f"StringIO({response_name}.text), **{parser_kwargs})"
-        ),
+        f"{df_name} = pd.read_csv(StringIO({response_name}.text), **{parser_kwargs})",
     ])
     return df_name
+
+
+def _operand_expression(df: str, operand: dict[str, Any]) -> str:
+    if operand["type"] == "column":
+        return f"{df}[{operand['value']!r}]"
+    if operand["type"] == "constant":
+        return repr(operand["value"])
+    raise ValueError(f"Unknown derive operand: {operand['type']!r}")
 
 
 def _filter_expression(

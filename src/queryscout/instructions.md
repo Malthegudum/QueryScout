@@ -21,15 +21,24 @@ Transform data one step at a time using QueryScout tools:
 
 - `filter_result`
 - `select_columns`
+- `sort_result`
+- `derive_column`
+- `time_change`
+- `pivot_result`
 - `group_by`
 - `join_results`
+- `concat_results`
 
 After every transformation, inspect the returned row count, columns, dtypes and
 preview. For joins, also inspect the input row counts and duplicate-key
-diagnostics. If a step looks wrong, correct that step before continuing.
+diagnostics. `time_change` sorts by its grouping and order columns and requires
+unique time keys. `pivot_result` requires unique pivot keys; filter or aggregate
+before pivoting when keys are duplicated. `concat_results` requires compatible
+column sets.
 
 The model may inspect data and choose transformations, but it must not create or
-rewrite canonical output rows itself.
+rewrite canonical output rows itself. Use `derive_column` for restricted
+arithmetic instead of inventing derived rows in the model response.
 
 ## Results
 
